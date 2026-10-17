@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Library</OutputType>
+    <AssemblyName>HideoutBackport</AssemblyName>
+    <RootNamespace>HideoutBackport</RootNamespace>
+    <Version>1.0.0</Version>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="SPTushonka.Common" Version="4.1.6" ExcludeAssets="runtime" />
+    <PackageReference Include="SPTushonka.DI" Version="4.1.6" ExcludeAssets="runtime" />
+    <PackageReference Include="SPTushonka.Server.Core" Version="4.1.6" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="config.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="data\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

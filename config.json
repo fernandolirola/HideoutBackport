@@ -1,0 +1,13 @@
+{
+  "Enabled": true,
+  "UpgradeRequirements": true,
+  "LiveFoundInRaidRules": true,
+  "ConstructionTimes": true,
+  "UpgradeBonuses": true,
+  "CraftTimes": true,
+  "CraftRecipes": true,
+  "NewCrafts": true,
+  "RemoveRetiredCrafts": true,
+  "ScavCaseTimes": true,
+  "Debug": false
+}
