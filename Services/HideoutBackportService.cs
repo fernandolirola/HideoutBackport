@@ -3,13 +3,18 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using SPTarkov.Common.Models.Logging;
 using SPTarkov.DI.Annotations;
+using SPTarkov.Reflection.Patching;
 using SPTarkov.Server.Core.DI;
+using SPTarkov.Server.Core.Helpers.Profile;
 using SPTarkov.Server.Core.Helpers.Server;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Hideout;
 using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTarkov.Server.Core.Utils;
 using SPTarkov.Server.Core.Utils.Cloners;
+using BotHideoutArea = SPTarkov.Server.Core.Models.Eft.Common.Tables.BotHideoutArea;
+using Upd = SPTarkov.Server.Core.Models.Eft.Common.Tables.Upd;
+using UpdResource = SPTarkov.Server.Core.Models.Eft.Common.Tables.UpdResource;
 
 namespace HideoutBackport.Services;
 
@@ -64,6 +69,7 @@ public sealed class HideoutBackportService(
         AllowTrailingCommas = true,
     };
 
+    private static TemplateTable? templates;
     private string modPath = string.Empty;
     private BackportConfig config = new();
     private readonly List<HideoutProduction> pendingCrafts = [];
@@ -77,6 +83,17 @@ public sealed class HideoutBackportService(
         {
             logger.Info($"{Prefix} Disabled in config.json");
             return Task.CompletedTask;
+        }
+
+        try
+        {
+            templates = templateTable;
+            new WaterFilterPatch().Enable();
+            new AirFilterPatch().Enable();
+        }
+        catch (Exception ex)
+        {
+            logger.Warning($"{Prefix} Filter fix was not applied: {ex.Message}");
         }
 
         try
@@ -335,8 +352,7 @@ public sealed class HideoutBackportService(
         {
             foreach (var theirs in liveRecipes.Where(r => !current.Contains(r.Id.ToString())))
             {
-                // Locked crafts are unlocked by quest rewards this game version does not have
-                if (theirs.Locked == true)
+                if (!UsableHere(theirs))
                 {
                     skippedLocked++;
                     continue;
@@ -382,13 +398,38 @@ public sealed class HideoutBackportService(
         logger.Success($"{Prefix} Crafts: {changed} recipes updated, {timed} new craft times, {added} new crafts, {removed} retired"
                        + $", {scav} scav case times"
                        + (skippedMissing + skippedLocked > 0
-                           ? $" ({skippedMissing} new crafts wait for items, {skippedLocked} need quests from newer versions)"
+                           ? $" ({skippedMissing} new crafts wait for items, {skippedLocked} need quests or areas from newer versions)"
                            : ""));
     }
 
+    /// <summary>
+    /// Locked crafts are unlocked by quest rewards this game version does not have, and some live crafts
+    /// belong to areas it lacks or carry a quest requirement that lost its quest
+    /// </summary>
+    private bool UsableHere(HideoutProduction recipe) =>
+        recipe.Locked != true
+        && hideoutTable.Areas.Any(a => a.Type == recipe.AreaType)
+        && (recipe.Requirements ?? []).All(r => r.Type switch
+        {
+            "Area" => hideoutTable.Areas.Any(a => (int?)a.Type == r.AreaType && a.Stages?.ContainsKey(r.RequiredLevel.ToString()!) == true),
+            "QuestComplete" => r.QuestId is not null,
+            _ => true,
+        });
+
     public Task AddPendingCraftsAsync()
     {
-        if (!config.Enabled || pendingCrafts.Count == 0)
+        if (!config.Enabled)
+        {
+            return Task.CompletedTask;
+        }
+
+        // Live slot filters can name items from other mods, which are only known by now
+        foreach (var bonus in hideoutTable.Areas.SelectMany(a => a.Stages?.Values ?? Enumerable.Empty<Stage>()).SelectMany(s => s.Bonuses ?? []))
+        {
+            bonus.Filter?.RemoveAll(id => !ItemExists(id));
+        }
+
+        if (pendingCrafts.Count == 0)
         {
             return Task.CompletedTask;
         }
@@ -409,5 +450,39 @@ public sealed class HideoutBackportService(
         logger.Info($"{Prefix} {added} more new crafts added after other mods loaded their items"
                     + (left > 0 ? $", {left} skipped (items not on this server)" : ""));
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// The server treats a filter with no saved resource as a stock one (100 water, 300 air),
+    /// so bigger filters like Everclear get their real capacity before they are drained
+    /// </summary>
+    private static void FillMissingResource(BotHideoutArea area)
+    {
+        foreach (var item in area.Slots?.SelectMany(s => s.Items ?? []) ?? [])
+        {
+            if (item.Upd?.Resource?.Value is null && templates?.Items.GetValueOrDefault(item.Template)?.Properties?.MaxResource is > 0 and var max)
+            {
+                item.Upd ??= new Upd { StackObjectsCount = 1 };
+                item.Upd.Resource = new UpdResource { Value = max, UnitsConsumed = 0 };
+            }
+        }
+    }
+
+    private sealed class WaterFilterPatch : AbstractPatch
+    {
+        protected override MethodBase? GetTargetMethod() =>
+            typeof(HideoutHelper).GetMethod("UpdateWaterFilters", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        [PatchPrefix]
+        public static void Prefix(BotHideoutArea waterFilterArea) => FillMissingResource(waterFilterArea);
+    }
+
+    private sealed class AirFilterPatch : AbstractPatch
+    {
+        protected override MethodBase? GetTargetMethod() =>
+            typeof(HideoutHelper).GetMethod("UpdateAirFilters", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        [PatchPrefix]
+        public static void Prefix(BotHideoutArea airFilterArea) => FillMissingResource(airFilterArea);
     }
 }
