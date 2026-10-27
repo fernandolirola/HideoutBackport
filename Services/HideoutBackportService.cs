@@ -325,6 +325,13 @@ public sealed class HideoutBackportService(
             if (config.CraftRecipes && MissingTemplates(recipeNodes.GetValueOrDefault(mine.Id.ToString())).Count == 0)
             {
                 var replacement = cloner.Clone(theirs)!;
+                // Live moved some open crafts behind quests whose rewards here never unlock them
+                if (mine.Locked != true && replacement.Locked == true)
+                {
+                    replacement.Locked = false;
+                    replacement.Requirements?.RemoveAll(r => r.Type == "QuestComplete");
+                }
+
                 if (!config.CraftTimes)
                 {
                     replacement.ProductionTime = mine.ProductionTime;
