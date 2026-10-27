@@ -317,7 +317,8 @@ public sealed class HideoutBackportService(
         {
             var mine = recipes[i];
             var theirs = liveRecipes.FirstOrDefault(r => r.Id == mine.Id);
-            if (theirs is null)
+            // Live reused some quest craft ids for other items, and this server's quest reward still points at the old one
+            if (theirs is null || (mine.Locked == true && theirs.EndProduct != mine.EndProduct))
             {
                 continue;
             }
@@ -325,12 +326,11 @@ public sealed class HideoutBackportService(
             if (config.CraftRecipes && MissingTemplates(recipeNodes.GetValueOrDefault(mine.Id.ToString())).Count == 0)
             {
                 var replacement = cloner.Clone(theirs)!;
-                // Live moved some open crafts behind quests whose rewards here never unlock them
-                if (mine.Locked != true && replacement.Locked == true)
-                {
-                    replacement.Locked = false;
-                    replacement.Requirements?.RemoveAll(r => r.Type == "QuestComplete");
-                }
+                // Quest rewards find their craft by its quest requirement, so the unlock rules stay as this server's quests expect
+                replacement.Locked = mine.Locked;
+                replacement.Requirements ??= [];
+                replacement.Requirements.RemoveAll(r => r.Type == "QuestComplete");
+                replacement.Requirements.AddRange(cloner.Clone(mine.Requirements?.Where(r => r.Type == "QuestComplete").ToList()) ?? []);
 
                 if (!config.CraftTimes)
                 {
