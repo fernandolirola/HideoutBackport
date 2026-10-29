@@ -8,6 +8,7 @@ Brings the hideout from the current live game version (1.2.0.0.47965) to SPT 4.1
 - **Crafts**: live production times, ingredients and outputs, new crafts and retired crafts.
   New crafts are only added when every item they use exists on your server (other mods such as
   content backports can provide them). Crafts unlocked by quests that this version does not have are skipped.
+  Crafts that live opened to everyone (Virtex, VOG-17, UHF RFID Reader) no longer need their quest.
 - Server only. Your hideout progress is kept; the new values apply to the next upgrades and crafts.
 
 ## Compatibility
@@ -55,6 +56,7 @@ Traz o hideout da versão live atual do jogo (1.2.0.0.47965) para o SPT 4.1.6.
 - **Crafts**: tempos, ingredientes e produtos do live, crafts novos e crafts removidos.
   Crafts novos só entram quando todos os itens existem no seu servidor (mods de backport de conteúdo podem trazê-los).
   Crafts liberados por missões que esta versão não tem são pulados.
+  Crafts que o live liberou para todos (Virtex, VOG-17, leitor UHF RFID) não precisam mais da missão.
 - Só servidor. Seu progresso no hideout é mantido; os valores novos valem para os próximos upgrades e crafts.
 
 ### Compatibilidade

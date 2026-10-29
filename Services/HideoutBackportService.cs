@@ -9,6 +9,7 @@ using SPTarkov.Server.Core.Helpers.Profile;
 using SPTarkov.Server.Core.Helpers.Server;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Hideout;
+using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTarkov.Server.Core.Utils;
 using SPTarkov.Server.Core.Utils.Cloners;
@@ -311,7 +312,7 @@ public sealed class HideoutBackportService(
         var liveRecipes = live?.Recipes ?? [];
         var current = recipes.Select(r => r.Id.ToString()).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        int changed = 0, timed = 0, added = 0, skippedMissing = 0, skippedLocked = 0, removed = 0;
+        int changed = 0, timed = 0, added = 0, skippedMissing = 0, skippedLocked = 0, removed = 0, unlocked = 0;
 
         for (int i = 0; i < recipes.Count; i++)
         {
@@ -326,11 +327,18 @@ public sealed class HideoutBackportService(
             if (config.CraftRecipes && MissingTemplates(recipeNodes.GetValueOrDefault(mine.Id.ToString())).Count == 0)
             {
                 var replacement = cloner.Clone(theirs)!;
-                // Quest rewards find their craft by its quest requirement, so the unlock rules stay as this server's quests expect
-                replacement.Locked = mine.Locked;
                 replacement.Requirements ??= [];
-                replacement.Requirements.RemoveAll(r => r.Type == "QuestComplete");
-                replacement.Requirements.AddRange(cloner.Clone(mine.Requirements?.Where(r => r.Type == "QuestComplete").ToList()) ?? []);
+                if (mine.Locked == true && theirs.Locked != true && replacement.Requirements.All(r => r.Type != "QuestComplete"))
+                {
+                    unlocked += DropQuestUnlocks(mine);
+                }
+                else
+                {
+                    // Quest rewards find their craft by its quest requirement, so the unlock rules stay as this server's quests expect
+                    replacement.Locked = mine.Locked;
+                    replacement.Requirements.RemoveAll(r => r.Type == "QuestComplete");
+                    replacement.Requirements.AddRange(cloner.Clone(mine.Requirements?.Where(r => r.Type == "QuestComplete").ToList()) ?? []);
+                }
 
                 if (!config.CraftTimes)
                 {
@@ -402,11 +410,35 @@ public sealed class HideoutBackportService(
             }
         }
 
-        logger.Success($"{Prefix} Crafts: {changed} recipes updated, {timed} new craft times, {added} new crafts, {removed} retired"
+        logger.Success($"{Prefix} Crafts: {changed} recipes updated, {unlocked} no longer need a quest, {timed} new craft times, {added} new crafts, {removed} retired"
                        + $", {scav} scav case times"
                        + (skippedMissing + skippedLocked > 0
                            ? $" ({skippedMissing} new crafts wait for items, {skippedLocked} need quests or areas from newer versions)"
                            : ""));
+    }
+
+    /// <summary>
+    /// Live opened the craft to everyone, so the quest rewards that unlocked it would match no craft
+    /// and the server would log an error each time a profile with those quests done loads
+    /// </summary>
+    private int DropQuestUnlocks(HideoutProduction craft)
+    {
+        foreach (var questId in (craft.Requirements ?? []).Where(r => r.Type == "QuestComplete" && r.QuestId is not null).Select(r => r.QuestId!.Value))
+        {
+            if (templateTable.Quests.GetValueOrDefault(questId)?.Rewards is not { } rewards)
+            {
+                continue;
+            }
+
+            foreach (var list in rewards.Values)
+            {
+                list?.RemoveAll(r => r.Type == RewardType.ProductionScheme
+                                     && r.Items?.FirstOrDefault()?.Template == craft.EndProduct
+                                     && r.TraderId?.ToString() == ((int)craft.AreaType!).ToString());
+            }
+        }
+
+        return 1;
     }
 
     /// <summary>
