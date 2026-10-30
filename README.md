@@ -73,3 +73,5 @@ Extraia o zip na pasta do jogo (a que contém `SPT_Runtime`), ficando `SPT_Runti
 
 Os dados de hideout em `data/` vêm do projeto do servidor do SPT (branch `5.0x-dev`, commit `fbefff2`),
 sob licença **CC BY-NC-SA 4.0**. O código do mod é MIT.
+
+<sub>Enjoying the mod? Curtiu o mod? [Buy me a coffee on Ko-fi](https://ko-fi.com/zezinhoeft)</sub>
