@@ -6,7 +6,7 @@
     <OutputType>Library</OutputType>
     <AssemblyName>HideoutBackport</AssemblyName>
     <RootNamespace>HideoutBackport</RootNamespace>
-    <Version>1.0.4</Version>
+    <Version>1.0.5</Version>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
 
