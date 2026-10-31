@@ -4,7 +4,9 @@ using System.Text.Json.Nodes;
 using SPTarkov.Common.Models.Logging;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Reflection.Patching;
+using SPTarkov.Server.Core.Controllers;
 using SPTarkov.Server.Core.DI;
+using SPTarkov.Server.Core.Helpers.Items;
 using SPTarkov.Server.Core.Helpers.Profile;
 using SPTarkov.Server.Core.Helpers.Server;
 using SPTarkov.Server.Core.Models.Common;
@@ -13,6 +15,7 @@ using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTarkov.Server.Core.Utils;
 using SPTarkov.Server.Core.Utils.Cloners;
+using Item = SPTarkov.Server.Core.Models.Eft.Common.Tables.Item;
 using BotHideoutArea = SPTarkov.Server.Core.Models.Eft.Common.Tables.BotHideoutArea;
 using Upd = SPTarkov.Server.Core.Models.Eft.Common.Tables.Upd;
 using UpdResource = SPTarkov.Server.Core.Models.Eft.Common.Tables.UpdResource;
@@ -55,6 +58,7 @@ public sealed class LatePass(HideoutBackportService service) : IOnLoad
 public sealed class HideoutBackportService(
     HideoutTable hideoutTable,
     TemplateTable templateTable,
+    ItemHelper itemHelper,
     JsonUtil jsonUtil,
     ICloner cloner,
     ModHelper modHelper,
@@ -71,6 +75,7 @@ public sealed class HideoutBackportService(
     };
 
     private static TemplateTable? templates;
+    private static ItemHelper? items;
     private string modPath = string.Empty;
     private BackportConfig config = new();
     private readonly List<HideoutProduction> pendingCrafts = [];
@@ -89,12 +94,14 @@ public sealed class HideoutBackportService(
         try
         {
             templates = templateTable;
+            items = itemHelper;
             new WaterFilterPatch().Enable();
             new AirFilterPatch().Enable();
+            new AmmoBoxCraftPatch().Enable();
         }
         catch (Exception ex)
         {
-            logger.Warning($"{Prefix} Filter fix was not applied: {ex.Message}");
+            logger.Warning($"{Prefix} Hideout fixes were not applied: {ex.Message}");
         }
 
         try
@@ -523,5 +530,25 @@ public sealed class HideoutBackportService(
 
         [PatchPrefix]
         public static void Prefix(BotHideoutArea airFilterArea) => FillMissingResource(airFilterArea);
+    }
+
+    /// <summary>The server hands out crafted ammo packs (like 7N40 120 to 4x30) without their rounds</summary>
+    private sealed class AmmoBoxCraftPatch : AbstractPatch
+    {
+        protected override MethodBase? GetTargetMethod() =>
+            typeof(HideoutController).GetMethod("UnstackRewardIntoValidSize", BindingFlags.Instance | BindingFlags.NonPublic);
+
+        [PatchPostfix]
+        public static void Postfix(List<List<Item>> itemAndChildrenToSendToPlayer)
+        {
+            foreach (var reward in itemAndChildrenToSendToPlayer)
+            {
+                var tpl = reward[0].Template;
+                if (items!.IsOfBaseclass(tpl, BaseClasses.AMMO_BOX) && templates!.Items.TryGetValue(tpl, out var details))
+                {
+                    items.AddCartridgesToAmmoBox(reward, details);
+                }
+            }
+        }
     }
 }
